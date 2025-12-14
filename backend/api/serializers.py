@@ -26,7 +26,7 @@ class ApplicationSerializer(serializers.ModelSerializer):
 class JobCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Job
-        fields = ['title', 'department', 'location', 'requirements', 'status']
+        exclude = ['id', 'created_at', 'applications_count']
 
 class ApplicationUpdateSerializer(serializers.ModelSerializer):
     class Meta:

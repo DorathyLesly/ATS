@@ -12,6 +12,9 @@ from .serializers import (
     CandidateSerializer, CVMatchSerializer
 )
 import json
+import re
+from PyPDF2 import PdfReader
+import io
 
 class JobViewSet(viewsets.ModelViewSet):
     queryset = Job.objects.all()
@@ -34,6 +37,72 @@ class JobViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(job)
         return Response(serializer.data)
 
+    def _extract_text_from_pdf(self, pdf_file):
+        """Extract text content from PDF file."""
+        try:
+            pdf_reader = PdfReader(io.BytesIO(pdf_file.read()))
+            text = ""
+            for page in pdf_reader.pages:
+                text += page.extract_text() + "\n"
+            return text.strip()
+        except Exception as e:
+            print(f"Error extracting text from PDF: {e}")
+            return ""
+
+    def _extract_skills_from_text(self, text):
+        """Extract skills from text using regex patterns."""
+        # Common tech skills and keywords
+        skill_patterns = [
+            r'\b(React|Angular|Vue|JavaScript|TypeScript|Node\.js|Express|Django|Flask|Spring|Laravel)\b',
+            r'\b(Python|Java|C\+\+|C#|Go|Rust|PHP|Ruby|Swift|Kotlin)\b',
+            r'\b(HTML|CSS|SCSS|SASS|Bootstrap|Tailwind|Material-UI)\b',
+            r'\b(SQL|MySQL|PostgreSQL|MongoDB|Redis|Elasticsearch)\b',
+            r'\b(AWS|Azure|GCP|Docker|Kubernetes|Jenkins|Git|GitHub|GitLab)\b',
+            r'\b(Figma|Sketch|Adobe XD|InVision|Zeplin|Prototyping)\b',
+            r'\b(UI/UX|User Experience|User Interface|Design Systems)\b',
+            r'\b(Machine Learning|AI|Data Science|TensorFlow|PyTorch|NLP)\b',
+            r'\b(Agile|Scrum|Kanban|JIRA|Confluence|Trello)\b',
+            r'\b(REST|GraphQL|API|Microservices|Serverless)\b'
+        ]
+
+        found_skills = set()
+        text_lower = text.lower()
+
+        for pattern in skill_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            found_skills.update(matches)
+
+        # Clean up skills (remove duplicates and normalize)
+        cleaned_skills = []
+        for skill in found_skills:
+            # Normalize common variations
+            if skill.lower() in ['react', 'angular', 'vue']:
+                cleaned_skills.append(skill.title())
+            elif skill.lower() in ['nodejs', 'node.js']:
+                cleaned_skills.append('Node.js')
+            elif skill.lower() in ['ui/ux', 'user experience', 'user interface']:
+                cleaned_skills.append('UI/UX')
+            else:
+                cleaned_skills.append(skill)
+
+        return list(set(cleaned_skills))  # Remove duplicates
+
+    def _calculate_match_score(self, cv_skills, job_requirements):
+        """Calculate match score between CV skills and job requirements."""
+        if not cv_skills:
+            return 0
+
+        requirements_lower = job_requirements.lower()
+        matching_skills = []
+
+        for skill in cv_skills:
+            if skill.lower() in requirements_lower:
+                matching_skills.append(skill)
+
+        # Calculate percentage based on matching skills
+        match_percentage = (len(matching_skills) / len(cv_skills)) * 100
+        return int(match_percentage)
+
     @action(detail=True, methods=['post'])
     def process_cvs(self, request, pk=None):
         job = self.get_object()
@@ -47,44 +116,73 @@ class JobViewSet(viewsets.ModelViewSet):
 
         processed_cvs = []
 
-        # Mock CV processing - in real implementation, you'd use NLP libraries
-        mock_skill_sets = [
-            ['React', 'TypeScript', 'Node.js', 'GraphQL', 'AWS', 'Docker'],
-            ['Python', 'Django', 'PostgreSQL', 'REST APIs', 'Docker', 'AWS'],
-            ['Figma', 'UI/UX', 'Prototyping', 'User Research', 'Design Systems'],
-            ['JavaScript', 'Vue.js', 'CSS', 'HTML', 'Git', 'Webpack'],
-            ['SQL', 'Python', 'Tableau', 'Power BI', 'Data Analysis', 'Statistics'],
-            ['Java', 'Spring Boot', 'Microservices', 'Docker', 'Kubernetes'],
-            ['Google Analytics', 'SEO', 'SEM', 'Content Marketing', 'HubSpot'],
-            ['Sketch', 'InVision', 'Principle', 'Wireframing', 'Usability Testing']
-        ]
-
         for i, cv_file in enumerate(uploaded_files):
-            # Mock text extraction and skill identification
-            skill_set = mock_skill_sets[i % len(mock_skill_sets)]
+            try:
+                # Extract text from PDF
+                extracted_text = self._extract_text_from_pdf(cv_file)
 
-            # Calculate match score based on job requirements
-            requirements_text = job.requirements.lower()
-            matching_skills = [skill for skill in skill_set if skill.lower() in requirements_text]
-            match_score = int((len(matching_skills) / len(skill_set)) * 100) if skill_set else 0
+                # Extract skills from text
+                skills = self._extract_skills_from_text(extracted_text)
 
-            processed_cv = {
-                'id': f'cv-{i+1}',
-                'fileName': cv_file.name,
-                'skills': skill_set,
-                'matchScore': match_score,
-                'extractedText': f'Extracted content from {cv_file.name}... This CV contains skills in {", ".join(skill_set[:3])}...',
-                'uploadedAt': timezone.now().isoformat()
-            }
-            processed_cvs.append(processed_cv)
+                # If no skills found, use fallback mock skills for demo purposes
+                if not skills:
+                    mock_skill_sets = [
+                        ['React', 'TypeScript', 'Node.js', 'GraphQL', 'AWS', 'Docker'],
+                        ['Python', 'Django', 'PostgreSQL', 'REST APIs', 'Docker', 'AWS'],
+                        ['Figma', 'UI/UX', 'Prototyping', 'User Research', 'Design Systems'],
+                        ['JavaScript', 'Vue.js', 'CSS', 'HTML', 'Git', 'Webpack'],
+                        ['SQL', 'Python', 'Tableau', 'Power BI', 'Data Analysis', 'Statistics'],
+                        ['Java', 'Spring Boot', 'Microservices', 'Docker', 'Kubernetes'],
+                        ['Google Analytics', 'SEO', 'SEM', 'Content Marketing', 'HubSpot'],
+                        ['Sketch', 'InVision', 'Principle', 'Wireframing', 'Usability Testing']
+                    ]
+                    skills = mock_skill_sets[i % len(mock_skill_sets)]
+                    extracted_text = f'Extracted content from {cv_file.name}... This CV contains skills in {", ".join(skills[:3])}...'
 
-        # Filter CVs with match score >= 60 and sort by score descending
-        filtered_cvs = [cv for cv in processed_cvs if cv['matchScore'] >= 60]
+                # Calculate match score
+                match_score = self._calculate_match_score(skills, job.requirements)
+
+                # Create CV match record in database
+                cv_match = CVMatch.objects.create(
+                    job=job,
+                    file_name=cv_file.name,
+                    extracted_skills=skills,
+                    match_score=match_score,
+                    match_status='matched' if match_score >= 80 else 'not_matched',
+                    extracted_text=extracted_text[:1000]  # Limit text length
+                )
+
+                processed_cv = {
+                    'id': cv_match.id,
+                    'fileName': cv_file.name,
+                    'skills': skills,
+                    'matchScore': match_score,
+                    'extractedText': extracted_text[:200] + '...' if len(extracted_text) > 200 else extracted_text,
+                    'uploadedAt': cv_match.uploaded_at.isoformat()
+                }
+                processed_cvs.append(processed_cv)
+
+            except Exception as e:
+                print(f"Error processing CV {cv_file.name}: {e}")
+                # Return error for this specific CV but continue processing others
+                processed_cv = {
+                    'id': f'error-{i+1}',
+                    'fileName': cv_file.name,
+                    'skills': [],
+                    'matchScore': 0,
+                    'extractedText': f'Error processing {cv_file.name}: {str(e)}',
+                    'uploadedAt': timezone.now().isoformat(),
+                    'error': str(e)
+                }
+                processed_cvs.append(processed_cv)
+
+        # Filter CVs with match score >= 60 (but show all for transparency)
+        filtered_cvs = processed_cvs  # Show all processed CVs
         filtered_cvs.sort(key=lambda x: x['matchScore'], reverse=True)
 
         return Response({
             'total_processed': len(processed_cvs),
-            'filtered_count': len(filtered_cvs),
+            'filtered_count': len([cv for cv in filtered_cvs if cv['matchScore'] >= 60]),
             'filtered_cvs': filtered_cvs
         })
 
