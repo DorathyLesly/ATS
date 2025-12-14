@@ -8,7 +8,7 @@ from django.conf import settings
 from .models import Job, Application, Candidate, CVMatch
 from .serializers import (
     JobSerializer, JobCreateSerializer,
-    ApplicationSerializer, ApplicationUpdateSerializer,
+    ApplicationSerializer, ApplicationCreateSerializer, ApplicationUpdateSerializer,
     CandidateSerializer, CVMatchSerializer
 )
 import json
@@ -199,7 +199,9 @@ class ApplicationViewSet(viewsets.ModelViewSet):
     serializer_class = ApplicationSerializer
 
     def get_serializer_class(self):
-        if self.action in ['update', 'partial_update']:
+        if self.action == 'create':
+            return ApplicationCreateSerializer
+        elif self.action in ['update', 'partial_update']:
             return ApplicationUpdateSerializer
         return ApplicationSerializer
 

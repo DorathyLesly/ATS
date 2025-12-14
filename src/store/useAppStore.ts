@@ -56,6 +56,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const applicationsData = await response.json();
       const applications = applicationsData.map((app: any) => ({
         ...app,
+        jobId: app.job,
         appliedAt: new Date(app.applied_at),
       }));
       set({ applications, loading: false });
@@ -114,6 +115,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const updatedAppData = await response.json();
       const updatedApp = {
         ...updatedAppData,
+        jobId: updatedAppData.job,
         appliedAt: new Date(updatedAppData.applied_at),
       };
       set((state) => ({
@@ -135,6 +137,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const updatedAppData = await response.json();
       const updatedApp = {
         ...updatedAppData,
+        jobId: updatedAppData.job,
         appliedAt: new Date(updatedAppData.applied_at),
       };
       set((state) => ({
@@ -156,6 +159,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const updatedAppData = await response.json();
       const updatedApp = {
         ...updatedAppData,
+        jobId: updatedAppData.job,
         appliedAt: new Date(updatedAppData.applied_at),
       };
       set((state) => ({

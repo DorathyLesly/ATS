@@ -23,6 +23,11 @@ class ApplicationSerializer(serializers.ModelSerializer):
         model = Application
         fields = '__all__'
 
+class ApplicationCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Application
+        fields = '__all__'
+
 class JobCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Job
