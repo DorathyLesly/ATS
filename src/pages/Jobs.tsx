@@ -378,6 +378,9 @@ export default function JobsPage() {
                                 // Refresh data
                                 fetchJobs();
                                 fetchApplications(); // Refresh applications to show the new candidate
+
+                                // Navigate to Applications page to view all candidates
+                                navigate('/applications');
                               } else {
                                 const errorData = await applicationResponse.json();
                                 toast({
